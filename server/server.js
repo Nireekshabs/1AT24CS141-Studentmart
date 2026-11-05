@@ -1,34 +1,38 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
-
 require("dotenv").config();
+const authRoutes = require("./routes/authroutes");
 
 const app = express();
-
-app.use(cors());
+app.use(cors({ origin: true }));
 app.use(express.json());
 
-app.get("/", (req, res) => {
-    res.json({
-        message: "StudentMart API is running"
-    });
+let databaseStatus = "disconnected";
+app.get("/api/health", (req, res) => {
+  res.json({ server: "running", database: databaseStatus, databaseName: mongoose.connection.name || null });
 });
+app.use("/api/auth", authRoutes);
 
-mongoose
-    .connect(process.env.MONGO_URI)
-    .then(() => {
-        console.log("MongoDB connected");
-
-        app.listen(process.env.PORT, () => {
-            console.log(
-                `Server running on http://localhost:${process.env.PORT}`
-            );
-        });
-    })
-    .catch((error) => {
-        console.error(
-            "MongoDB connection failed:",
-            error.message
-        );
-    });
+const PORT = Number(process.env.PORT || 5000);
+async function start() {
+  if (!process.env.MONGO_URI) {
+    console.error("ERROR: MONGO_URI is missing. Create server/.env using server/.env.example.");
+    process.exit(1);
+  }
+  if (!process.env.JWT_SECRET) {
+    console.error("ERROR: JWT_SECRET is missing. Create server/.env using server/.env.example.");
+    process.exit(1);
+  }
+  try {
+    await mongoose.connect(process.env.MONGO_URI);
+    databaseStatus = "connected";
+    console.log("MongoDB connected. Database:", mongoose.connection.name);
+    app.listen(PORT, () => console.log(`Server running at http://localhost:${PORT}`));
+  } catch (error) {
+    databaseStatus = "disconnected";
+    console.error("MongoDB connection failed:", error.message);
+    process.exit(1);
+  }
+}
+start();
